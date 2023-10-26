@@ -87,6 +87,27 @@ Resources:
       DestinationCidrBlock: 10.0.0.0/16
       TransitGatewayAttachmentId: !Ref AppbTgwAttachment
 
+  ManagementVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.2.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: ManagementVPC
+
+  ManagementSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ManagementVpc
+      CidrBlock: 10.2.0.0/24
+      AvailabilityZone: us-east-1a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: ManagementSubnet
+
 ### VPC Resources for Application VPC
   
   AppbVPC:
