@@ -5,6 +5,10 @@ Parameters:
     Type: 'AWS::EC2::KeyPair::KeyName'
     Description: Name of the KeyPair used for EC2 instances
     ConstraintDescription: 'Must be the name of an existing EC2 KeyPair.'
+  
+  LatestAmiId:
+    Type: String
+    Description: ID of the latest AMI to use for EC2 instances
 
 Resources:
   TransitGateway:
