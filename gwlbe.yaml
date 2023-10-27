@@ -14,7 +14,7 @@ Resources:
       DefaultRouteTableAssociation: disable
       DefaultRouteTablePropagation: disable
 
-  FromAppBVpcsRouteTable:
+  FromAppbVpcsRouteTable:
     Type: AWS::EC2::TransitGatewayRouteTable
     Properties:
       TransitGatewayId: !Ref TransitGateway
@@ -34,13 +34,13 @@ Resources:
     Type: AWS::EC2::TransitGatewayRouteTableAssociation
     Properties: 
       TransitGatewayAttachmentId: !Ref AppbTgwAttachment
-      TransitGatewayRouteTableId: !Ref FromAppVpcsRouteTable
+      TransitGatewayRouteTableId: !Ref FromAppbVpcsRouteTable
 
   AttVpcTgwAttachAssociation:
     Type: AWS::EC2::TransitGatewayRouteTableAssociation
     Properties: 
       TransitGatewayAttachmentId: !Ref AttTgwAttachment
-      TransitGatewayRouteTableId: !Ref FromAppVpcsRouteTable
+      TransitGatewayRouteTableId: !Ref FromAppbVpcsRouteTable
 
   SecVpcTgwAttachAssociation:
     Type: AWS::EC2::TransitGatewayRouteTableAssociation
@@ -62,24 +62,24 @@ Resources:
       DestinationCidrBlock: 10.1.0.0/16
       TransitGatewayAttachmentId: !Ref AttTgwAttachment
 
-  FromAppVpcsRoute1:
+  FromAppbVpcsRoute1:
     Type: AWS::EC2::TransitGatewayRoute
     Properties:
-      TransitGatewayRouteTableId: !Ref FromAppVpcsRouteTable
+      TransitGatewayRouteTableId: !Ref FromAppbVpcsRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       TransitGatewayAttachmentId: !Ref SecTgwAttachment
 
-  FromAppVpcsRoute2:
+  FromAppbVpcsRoute2:
     Type: AWS::EC2::TransitGatewayRoute
     Properties:
-      TransitGatewayRouteTableId: !Ref FromAppVpcsRouteTable
+      TransitGatewayRouteTableId: !Ref FromAppbVpcsRouteTable
       DestinationCidrBlock: 10.1.0.0/16
       TransitGatewayAttachmentId: !Ref AttTgwAttachment
 
-  FromAppVpcsRoute3:
+  FromAppbVpcsRoute3:
     Type: AWS::EC2::TransitGatewayRoute
     Properties:
-      TransitGatewayRouteTableId: !Ref FromAppVpcsRouteTable
+      TransitGatewayRouteTableId: !Ref FromAppbVpcsRouteTable
       DestinationCidrBlock: 10.0.0.0/16
       TransitGatewayAttachmentId: !Ref AppbTgwAttachment
 
@@ -215,7 +215,7 @@ Resources:
       DestinationCidrBlock: 10.1.0.0/16
       TransitGatewayId: !Ref TransitGateway
 
-  AppEC2SecurityGroup:
+  AppbEC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for AppbEC2Instance
