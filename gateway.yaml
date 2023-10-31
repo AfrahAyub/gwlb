@@ -23,7 +23,7 @@ Parameters:
     Type: String
     Description: ID of the firewall instance
 ### parameters for panorama
-   SubnetId:
+  SubnetId:
     Type: String
   PanoramaPrivateIps:
     Type: List<String>
