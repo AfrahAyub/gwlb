@@ -612,75 +612,17 @@ Resources:
       Tags:
         - Key: Name
           Value: mgmt-svr
-
-###gateway load balancer
+### resources for gateway load balancer
   GatewayLoadBalancerTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Protocol: GENEVE
       Port: 6081
-      VpcId: !Ref SecVPC  # Replace with the appropriate VPC ID
+      VpcId: !Ref SecVPC  
       TargetType: instance
       HealthCheckProtocol: TCP
       HealthCheckPort: 80
       Name: !Sub "${PrefixNameTag}${GatewayLoadBalancerName}TargetGroup"
-
-  GatewayLoadBalancerAttachment:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
-    Properties:
-      TargetGroupArn: !Ref GatewayLoadBalancerTargetGroup
-      TargetId: !Ref FirewallInstanceId  # Replace with the appropriate EC2 instance ID
-
-  GatewayLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Name: !Sub "${PrefixNameTag}${GatewayLoadBalancerName}"
-      Subnets:
-        - !Ref SecGwlbeSubnet  # Replace with appropriate subnet IDs
-      LoadBalancerAttributes:
-        - Key: idle_timeout.timeout_seconds
-          Value: "60"
-      EnableCrossZoneLoadBalancing: true
-    DependsOn: GatewayLoadBalancerTargetGroup
-
-  GatewayLoadBalancerListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref GatewayLoadBalancerTargetGroup
-      LoadBalancerArn: !Ref GatewayLoadBalancer
-      Port: 6081
-      Protocol: GENEVE
-
-  GatewayLoadBalancerService:
-    Type: AWS::EC2::VPCEndpointService
-    Properties:
-      NetworkLoadBalancerArns:
-        - !GetAtt GatewayLoadBalancer.Arn
-      AcceptanceRequired: false
-      PrivateDnsName: !Sub "${PrefixNameTag}${GatewayLoadBalancerName}vpce-svc"
-
-  GatewayLoadBalancerVPCEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Properties:
-      VpcId: !Ref SecVPC  # Replace with the appropriate VPC ID
-      ServiceName: !GetAtt GatewayLoadBalancerService.ServiceName
-      VpcEndpointType: Interface
-      SubnetIds:
-        - !Ref SecGwlbeSubnet  # Replace with appropriate subnet IDs
-      PrivateDnsEnabled: true
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Action:
-              - ec2:DescribeRouteTables
-            Resource: "*"
-            Condition:
-              StringEquals:
-                "ec2:VpcId": !Ref SecVPC  # Replace with the appropriate VPC ID
-    DependsOn: GatewayLoadBalancerService
 
 Outputs:
   AppbEC2InstancePublicIP:
