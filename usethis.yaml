@@ -669,8 +669,6 @@ Resources:
       VpcEndpointType: Interface
       SubnetIds:
         - !Ref SecGwlbeSubnet  # Replace with appropriate subnet IDs
-      SecurityGroupIds:
-        - !Ref YourSecurityGroupId  # Replace with appropriate security group ID
       PrivateDnsEnabled: true
       PolicyDocument:
         Version: "2012-10-17"
