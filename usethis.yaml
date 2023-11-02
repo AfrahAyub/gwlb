@@ -254,11 +254,6 @@ Resources:
 
 
 
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: !Ref LatestAmiId  # Replace this with the appropriate AMI for your region
-
 ### VPC Resources for Application VPC
   
   AppbVPC:
