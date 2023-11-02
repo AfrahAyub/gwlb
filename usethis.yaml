@@ -143,6 +143,116 @@ Resources:
       Tags:
         - Key: Name
           Value: ManagementSubnet
+### gateway loadbalancer
+  GWLBTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Protocol: GENEVE
+      Port: 6081
+      VpcId: !Ref SecVpcId
+      TargetType: instance
+      HealthCheckProtocol: TCP
+      HealthCheckPort: 80
+      Name: !Sub '${PrefixNameTag}GatewayLoadBalancerTargetGroup'
+
+  GWLbTargetGroupAttachment:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
+    Properties:
+      TargetGroupArn: !Ref GWLBTargetGroup
+      TargetId: !Ref FirewallId
+  
+  GWLB:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Name: !Sub '${PrefixNameTag}GatewayLoadBalancer'
+      Subnets: !Split [',', !Ref SubnetsMap]
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+      LoadBalancerType: gateway
+      IpAddressType: ipv4
+      EnableCrossZoneLoadBalancing: true
+      SecurityGroups: [ !Ref FirewallId ]
+      Tags:
+        - Key: Name
+          Value: !Sub '${PrefixNameTag}GatewayLoadBalancer'
+  
+  GWLBListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref GWLBTargetGroup
+      LoadBalancerArn: !Ref GWLB
+      Port: 6081
+      Protocol: GENEVE
+
+  GWLBEndpointService:
+    Type: 'AWS::EC2::VPCEndpointService'
+    Properties:
+      NetworkLoadBalancerArns:
+        - !GetAtt GWLB.LoadBalancerArn
+      AcceptanceRequired: false
+      GatewayLoadBalancerArns:
+        - !Ref GWLB
+
+  GWLBEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Properties:
+      VpcId: !Ref SecVpcId
+      ServiceName: !GetAtt GWLBEndpointService.ServiceName
+      SubnetIds: !Split [',', !Ref SubnetsMap]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: !GetAtt GWLBEndpointService.ServiceName
+            Action: 'ec2:DescribeSecurityGroups'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${PrefixNameTag}GatewayLoadBalancerEndpoint'
+
+### panorama
+
+  PrivateNetworkInterface:
+    Type: "AWS::EC2::NetworkInterface"
+    Properties:
+      SubnetId: !Ref SubnetId
+      PrivateIpAddresses: 
+        - PrivateIpAddress: !Select [0, !Ref PanoramaPrivateIps]
+      SecurityGroupIds: 
+        - !Ref PanoramaSecurityGroup
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PrefixNameTag}${PanoramaName}-primary-interface"
+        - !Ref GlobalTags
+
+  PanoramaInstance:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: !Ref PanoramaAmi
+      InstanceType: !Ref PanoramaInstanceType
+      KeyName: !Ref SshKeyName
+      NetworkInterfaces: 
+        - NetworkInterfaceId: !Ref PrivateNetworkInterface
+          DeviceIndex: 0
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PrefixNameTag}${PanoramaName}"
+        - !Ref GlobalTags
+
+  ElasticIp:
+    Type: "AWS::EC2::EIP"
+
+  ElasticIpAssociation:
+    Type: "AWS::EC2::EIPAssociation"
+    Properties:
+      AllocationId: !GetAtt ElasticIp.AllocationId
+      NetworkInterfaceId: !Ref PrivateNetworkInterface
+
+
 
 ### VPC Resources for Application VPC
   
@@ -309,7 +419,6 @@ Resources:
       SubnetIds:
         - !Ref AppbTgwSubnet
 
-      
 ### VPC Resources for Attack VPC
 
   AttVPC:
@@ -649,125 +758,7 @@ Resources:
       Tags:
         - Key: Name
           Value: mgmt-svr
-### gateway loadbalancer
-  GWLBTargetGroup:
-    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
-    Properties:
-      Protocol: GENEVE
-      Port: 6081
-      VpcId: !Ref SecVpc
-      TargetType: instance
-      HealthCheckProtocol: TCP
-      HealthCheckPort: 80
-      Name: !Sub '${PrefixNameTag}GatewayLoadBalancerTargetGroup'
 
-  GWLbTargetGroupAttachment:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
-    Properties:
-      TargetGroupArn: !Ref GWLBTargetGroup
-      TargetId: !Ref FirewallId
-  
-  GWLB:
-    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
-    Properties:
-      Name: !Sub '${PrefixNameTag}GatewayLoadBalancer'
-      Subnets: !Split [',', !Ref SubnetsMap]
-      LoadBalancerAttributes:
-        - Key: idle_timeout.timeout_seconds
-          Value: '60'
-      LoadBalancerType: gateway
-      IpAddressType: ipv4
-      EnableCrossZoneLoadBalancing: true
-      SecurityGroups: [ !Ref FirewallId ]
-      Tags:
-        - Key: Name
-          Value: !Sub '${PrefixNameTag}GatewayLoadBalancer'
-  
-  GWLBListener:
-    Type: 'AWS::ElasticLoadBalancingV2::Listener'
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref GWLBTargetGroup
-      LoadBalancerArn: !Ref GWLB
-      Port: 6081
-      Protocol: GENEVE
-
-  GWLBEndpointService:
-    Type: 'AWS::EC2::VPCEndpointService'
-    Properties:
-      NetworkLoadBalancerArns:
-        - !GetAtt GWLB.LoadBalancerArn
-      AcceptanceRequired: false
-      GatewayLoadBalancerArns:
-        - !Ref GWLB
-
-  GWLBEndpoint:
-    Type: 'AWS::EC2::VPCEndpoint'
-    Properties:
-      VpcId: !Ref SecVpcId
-      ServiceName: !GetAtt GWLBEndpointService.ServiceName
-      SubnetIds: !Split [',', !Ref SubnetsMap]
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: !GetAtt GWLBEndpointService.ServiceName
-            Action: 'ec2:DescribeSecurityGroups'
-            Resource: '*'
-      Tags:
-        - Key: Name
-          Value: !Sub '${PrefixNameTag}GatewayLoadBalancerEndpoint'
-
-### panorama
-
-  PrivateNetworkInterface:
-    Type: "AWS::EC2::NetworkInterface"
-    Properties:
-      SubnetId: !Ref SubnetId
-      PrivateIpAddresses: 
-        - PrivateIpAddress: !Select [0, !Ref PanoramaPrivateIps]
-      SecurityGroupIds: 
-        - !Ref PanoramaSecurityGroup
-      Tags: 
-        - Key: Name
-          Value: !Sub "${PrefixNameTag}${PanoramaName}-primary-interface"
-        - !Ref GlobalTags
-
-  PanoramaInstance:
-    Type: "AWS::EC2::Instance"
-    Properties:
-      ImageId: !Ref PanoramaAmi
-      InstanceType: !Ref PanoramaInstanceType
-      KeyName: !Ref SshKeyName
-      NetworkInterfaces: 
-        - NetworkInterfaceId: !Ref PrivateNetworkInterface
-          DeviceIndex: 0
-      Tags: 
-        - Key: Name
-          Value: !Sub "${PrefixNameTag}${PanoramaName}"
-        - !Ref GlobalTags
-
-  ElasticIp:
-    Type: "AWS::EC2::EIP"
-
-  ElasticIpAssociation:
-    Type: "AWS::EC2::EIPAssociation"
-    Properties:
-      AllocationId: !GetAtt ElasticIp.AllocationId
-      NetworkInterfaceId: !Ref PrivateNetworkInterface
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: "ami-0c55b159cbfafe1f0"
-    us-west-1:
-      AMI: "ami-0c55b159cbfafe1f0"
-    eu-west-1:
-      AMI: "ami-0c55b159cbfafe1f0"
-    ap-southeast-1:
-      AMI: "ami-0c55b159cbfafe1f0"
-      
 Outputs:
   AppbEC2InstancePublicIP:
     Value: !GetAtt AppbEC2Instance.PublicIp
