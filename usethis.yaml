@@ -418,16 +418,7 @@ Resources:
       VpcId: !Ref AppbVPC
       SubnetIds:
         - !Ref AppbTgwSubnet
-Mappings:
-  RegionMap:
-    us-east-1:
-      AMI: "ami-0c55b159cbfafe1f0"
-    us-west-1:
-      AMI: "ami-0c55b159cbfafe1f0"
-    eu-west-1:
-      AMI: "ami-0c55b159cbfafe1f0"
-    ap-southeast-1:
-      AMI: "ami-0c55b159cbfafe1f0"
+
       
 ### VPC Resources for Attack VPC
 
@@ -768,7 +759,17 @@ Mappings:
       Tags:
         - Key: Name
           Value: mgmt-svr
-
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: "ami-0c55b159cbfafe1f0"
+    us-west-1:
+      AMI: "ami-0c55b159cbfafe1f0"
+    eu-west-1:
+      AMI: "ami-0c55b159cbfafe1f0"
+    ap-southeast-1:
+      AMI: "ami-0c55b159cbfafe1f0"
+      
 Outputs:
   AppbEC2InstancePublicIP:
     Value: !GetAtt AppbEC2Instance.PublicIp
