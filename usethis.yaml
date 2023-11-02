@@ -23,24 +23,30 @@ Parameters:
     Type: String
     Description: ID of the firewall instance
 ### parameters for panorama
-  SubnetId:
+  InstanceType:
     Type: String
-  PanoramaPrivateIps:
-    Type: List<String>
-  PanoramaSecurityGroup:
+    Description: "EC2 Instance Type"
+  SSHKeyName:
     Type: String
-  PanoramaAmi:
+    Description: "SSH Key Pair Name"
+  PanoramaIP:
     Type: String
-  PanoramaInstanceType:
+    Description: "Panorama Server IP Address"
+  MgmtSubnetID:
     Type: String
-  SshKeyName:
+    Description: "Management Subnet ID"
+  NGFWMgmtSubnetCIDR:
     Type: String
-  PrefixNameTag:
+    Description: "Management Subnet CIDR Block"
+  DataSubnetID:
     Type: String
-  PanoramaName:
+    Description: "Data Subnet ID"
+  NGFWDataSubnetCIDR:
     Type: String
-  GlobalTags:
-    Type: CommaDelimitedList
+    Description: "Data Subnet CIDR Block"
+  SecurityGroupID:
+    Type: String
+    Description: "Security Group ID"
 ### parameters for vm-series
   PanoramaIP:
     Type: String
@@ -256,6 +262,26 @@ Resources:
   ElasticIP:
     Type: "AWS::EC2::EIP"
 
+  NGFWMgmtENI:
+    Type: "AWS::EC2::NetworkInterface"
+    Properties:
+      SubnetId: !Ref MgmtSubnetID
+      PrivateIpAddresses: 
+        - !Select [0, !CidrSplit !Ref NGFWMgmtSubnetCIDR, 256]
+      Groups: 
+        - !Ref SecurityGroupID
+      SourceDestCheck: true
+
+  NGFWDataENI:
+    Type: "AWS::EC2::NetworkInterface"
+    Properties:
+      SubnetId: !Ref DataSubnetID
+      PrivateIpAddresses: 
+        - !Select [0, !CidrSplit !Ref NGFWDataSubnetCIDR, 256]
+      Groups: 
+        - !Ref SecurityGroupID
+      SourceDestCheck: true
+
   VMInstance:
     Type: "AWS::EC2::Instance"
     Properties:
@@ -268,31 +294,10 @@ Resources:
         - NetworkInterfaceId: !Ref NGFWDataENI
           DeviceIndex: 1
       UserData:
-        Fn::Base64: 
-          Fn::Sub: |
-            #!/bin/bash
-            echo "panorama-server=${PanoramaIP}" >> /opt/pancfg/panorama_bootstrap.cfg
-          - PanoramaIP: !Ref PanoramaIP
-
-  NGFWMgmtENI:
-    Type: "AWS::EC2::NetworkInterface"
-    Properties:
-      SubnetId: !Ref MgmtSubnetID
-      PrivateIpAddresses: 
-        - !Select [0, !CidrSplit !Ref NGFWMgmtSubnetCIDR 256]
-      Groups: 
-        - !Ref SecurityGroupID
-      SourceDestCheck: true
-
-  NGFWDataENI:
-    Type: "AWS::EC2::NetworkInterface"
-    Properties:
-      SubnetId: !Ref DataSubnetID
-      PrivateIpAddresses: 
-        - !Select [0, !CidrSplit !Ref NGFWDataSubnetCIDR 256]
-      Groups: 
-        - !Ref SecurityGroupID
-      SourceDestCheck: true
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          echo "panorama-server=${PanoramaIP}" >> /opt/pancfg/panorama_bootstrap.cfg
+        PanoramaIP: !Ref PanoramaIP
 
 Mappings:
   RegionMap:
@@ -827,18 +832,18 @@ Outputs:
   PANORAMA_IP_ADDRESS:
     Value: !GetAtt ElasticIp.PublicIp
 
-  NGFWMgmtENI:
-    Description: "ID of the VM-Series management interface network interface."
-    Value: !Ref NGFWMgmtENI
-
-  NGFWDataENI:
-    Description: "ID of the VM-Series data interface network interface."
+  NGFWDataENIOutput:
+    Description: "Network Interface ID for Data"
     Value: !Ref NGFWDataENI
 
-  FirewallInstance:
-    Description: "ID of the deployed VM-Series firewall instance."
-    Value: !Ref VMInstance
+  NGFWMgmtENIOutput:
+    Description: "Network Interface ID for Management"
+    Value: !Ref NGFWMgmtENI
 
+  FirewallEIP:
+    Description: "Firewall Elastic IP"
+    Value: !GetAtt ElasticIP.PublicIp
+    
   FirewallPublicIP:
     Description: "Public IP address associated with the VM-Series firewall."
     Value: !GetAtt ElasticIP.PublicIp
