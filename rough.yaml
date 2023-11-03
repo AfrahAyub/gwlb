@@ -13,12 +13,6 @@ Parameters:
   PrefixNameTag:
     Type: String
     Description: Prefix to be added to resource names
-  SecVpcId:
-    Type: String
-    Description: ID of the security VPC
-  SubnetsMap:
-    Type: String
-    Description: Mapping of subnet names to subnet IDs in the security VPC
   FirewallId:
     Type: String
     Description: ID of the firewall instance
