@@ -202,7 +202,7 @@ Resources:
   PanoramaInstance:
     Type: "AWS::EC2::Instance"
     Properties:
-      ImageId: 'ami-05e891ec5e4cbd76f'
+      ImageId: "ami-05e891ec5e4cbd76f"
       InstanceType: "m5.2xlarge"
       KeyName: !Ref SshKeyName
       NetworkInterfaces: 
