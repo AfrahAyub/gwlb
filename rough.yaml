@@ -18,7 +18,6 @@
           Fn::Sub: |
             #!/bin/bash
             echo "panorama-server=${PanoramaIP}" >> /opt/pancfg/panorama_bootstrap.cfg
-          - PanoramaIP: !Ref PanoramaIP
 
   NGFWMgmtENI:
     Type: "AWS::EC2::NetworkInterface"
