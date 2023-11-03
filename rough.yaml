@@ -464,7 +464,7 @@ Resources:
   SecVPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.2.0.0/16
+      CidrBlock: 10.3.0.0/16
       Tags:
         - Key: Name
           Value: sec-vpc
@@ -631,12 +631,21 @@ Resources:
           Value: mgmt-svr
 
 ### gateway loadbalancer
+
+  GwlbSecVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.3.0.0/16
+      Tags:
+        - Key: Name
+          Value: sec-vpc
+
   GWLBTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
     Properties:
       Protocol: GENEVE
       Port: 6081
-      VpcId: !Ref SecVPC
+      VpcId: !Ref GwlbSecVPC
       TargetType: instance
       HealthCheckProtocol: TCP
       HealthCheckPort: 80
@@ -682,7 +691,7 @@ Resources:
   GWLBEndpoint:
     Type: 'AWS::EC2::VPCEndpoint'
     Properties:
-      VpcId: !Ref SecVpc
+      VpcId: !Ref GwlbSecVPC
       ServiceName: !GetAtt GWLBEndpointService.ServiceName
       SubnetIds: !Split [',', !Ref SecGwlbeSubnet]
       PolicyDocument:
