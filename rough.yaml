@@ -176,7 +176,7 @@ Resources:
   GWLBEndpoint:
     Type: 'AWS::EC2::VPCEndpoint'
     Properties:
-      VpcId: !Ref SecVpcId
+      VpcId: !Ref SecVpc
       ServiceName: !GetAtt GWLBEndpointService.ServiceName
       SubnetIds: !Split [',', !Ref SecGwlbeSubnet]
       PolicyDocument:
