@@ -10,31 +10,18 @@ Parameters:
     Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 ### parameters for gateway loadbalancer
-  PrefixNameTag:
-    Type: String
-    Description: Prefix to be added to resource names
   FirewallId:
     Type: String
     Description: ID of the firewall instance
 ### parameters for panorama
-  SubnetId:
-    Type: String
   PanoramaPrivateIps:
-    Type: List<String>
-  PanoramaSecurityGroup:
-    Type: String
-  PanoramaAmi:
-    Type: String
+    Type: ["10.4.1.100"]
   PanoramaInstanceType:
     Type: String
   SshKeyName:
     Type: String
-  PrefixNameTag:
-    Type: String
   PanoramaName:
     Type: String
-  GlobalTags:
-    Type: CommaDelimitedList
 ### parameters for vm-series
   PanoramaIP:
     Type: String
@@ -147,7 +134,7 @@ Resources:
       TargetType: instance
       HealthCheckProtocol: TCP
       HealthCheckPort: 80
-      Name: !Sub '${PrefixNameTag}GatewayLoadBalancerTargetGroup'
+
 
   GWLbTargetGroupAttachment:
     Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
@@ -158,7 +145,6 @@ Resources:
   GWLB:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
-      Name: !Sub '${PrefixNameTag}GatewayLoadBalancer'
       Subnets: !Split [',', !Ref SecGwlbeSubnet]
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
@@ -167,9 +153,6 @@ Resources:
       IpAddressType: ipv4
       EnableCrossZoneLoadBalancing: true
       SecurityGroups: [ !Ref FirewallId ]
-      Tags:
-        - Key: Name
-          Value: !Sub '${PrefixNameTag}GatewayLoadBalancer'
   
   GWLBListener:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
@@ -195,7 +178,7 @@ Resources:
     Properties:
       VpcId: !Ref SecVpcId
       ServiceName: !GetAtt GWLBEndpointService.ServiceName
-      SubnetIds: !Split [',', !Ref SubnetsMap]
+      SubnetIds: !Split [',', !Ref SecGwlbeSubnet]
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -204,9 +187,6 @@ Resources:
               Service: !GetAtt GWLBEndpointService.ServiceName
             Action: 'ec2:DescribeSecurityGroups'
             Resource: '*'
-      Tags:
-        - Key: Name
-          Value: !Sub '${PrefixNameTag}GatewayLoadBalancerEndpoint'
 
 ### panorama
 
@@ -218,24 +198,16 @@ Resources:
         - PrivateIpAddress: !Select [0, !Ref PanoramaPrivateIps]
       SecurityGroupIds: 
         - !Ref ManagementEC2SecurityGroup
-      Tags: 
-        - Key: Name
-          Value: !Sub "${PrefixNameTag}${PanoramaName}-primary-interface"
-        - !Ref GlobalTags
 
   PanoramaInstance:
     Type: "AWS::EC2::Instance"
     Properties:
-      ImageId: !Ref PanoramaAmi
-      InstanceType: !Ref PanoramaInstanceType
+      ImageId: 'ami-05e891ec5e4cbd76f'
+      InstanceType: "m5.2xlarge"
       KeyName: !Ref SshKeyName
       NetworkInterfaces: 
         - NetworkInterfaceId: !Ref PrivateNetworkInterface
           DeviceIndex: 0
-      Tags: 
-        - Key: Name
-          Value: !Sub "${PrefixNameTag}${PanoramaName}"
-        - !Ref GlobalTags
 
   ElasticIp:
     Type: "AWS::EC2::EIP"
