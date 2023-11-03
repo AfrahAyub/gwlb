@@ -760,7 +760,8 @@ Resources:
           Value: mgmt-svr
 
 Outputs:
-  PANORAMA_IP_ADDRESS:
-    Value: !GetAtt ElasticIp.PublicIp
+  AppbEC2InstancePublicIP:
+    Value: !GetAtt AppbEC2Instance.PublicIp
+    Description: Public IP address of AppbEC2Instance
 
  
