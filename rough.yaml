@@ -15,7 +15,7 @@ Parameters:
     Description: ID of the firewall instance
 ### parameters for panorama
   PanoramaPrivateIps:
-    Type: ["10.4.1.100"]
+    Type: "10.4.1.100"
   PanoramaInstanceType:
     Type: String
   SshKeyName:
