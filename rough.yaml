@@ -213,11 +213,11 @@ Resources:
   PrivateNetworkInterface:
     Type: "AWS::EC2::NetworkInterface"
     Properties:
-      SubnetId: !Ref SubnetId
+      SubnetId: !Ref ManagementSubnet
       PrivateIpAddresses: 
         - PrivateIpAddress: !Select [0, !Ref PanoramaPrivateIps]
       SecurityGroupIds: 
-        - !Ref PanoramaSecurityGroup
+        - !Ref ManagementEC2SecurityGroup
       Tags: 
         - Key: Name
           Value: !Sub "${PrefixNameTag}${PanoramaName}-primary-interface"
