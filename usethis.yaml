@@ -760,40 +760,7 @@ Resources:
           Value: mgmt-svr
 
 Outputs:
-  AppbEC2InstancePublicIP:
-    Value: !GetAtt AppbEC2Instance.PublicIp
-    Description: Public IP address of AppbEC2Instance
-
-  AttEC2InstancePublicIP:
-    Value: !GetAtt AttEC2Instance.PublicIp
-    Description: Public IP address of AttEC2Instance
-
-  ManagementEC2InstancePublicIP:
-    Value: !GetAtt ManagementEC2Instance.PublicIp
-    Description: Public IP address of ManagementEC2Instance
-
-  GWLBIds:
-    Description: Gateway Load Balancer IDs
-    Value: !Ref GatewayLoadBalancer
-  GWLBEIds:
-    Description: Gateway Load Balancer Endpoint IDs
-    Value: !Ref GatewayLoadBalancerEndpoint
-
   PANORAMA_IP_ADDRESS:
     Value: !GetAtt ElasticIp.PublicIp
 
-  NGFWMgmtENI:
-    Description: "ID of the VM-Series management interface network interface."
-    Value: !Ref NGFWMgmtENI
-
-  NGFWDataENI:
-    Description: "ID of the VM-Series data interface network interface."
-    Value: !Ref NGFWDataENI
-
-  FirewallInstance:
-    Description: "ID of the deployed VM-Series firewall instance."
-    Value: !Ref VMInstance
-
-  FirewallPublicIP:
-    Description: "Public IP address associated with the VM-Series firewall."
-    Value: !GetAtt ElasticIP.PublicIp
+ 
