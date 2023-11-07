@@ -19,8 +19,9 @@ Parameters:
 ### parameters for panorama
   PanoramaPrivateIps:
     Type: List<String>
-  PanoramaAmi:
-    Type: "ami-05e891ec5e4cbd76f"
+  PanoramaAmi: 
+    Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: "ami-05e891ec5e4cbd76f"
   PanoramaInstanceType:
     Type: String
   SshKeyName:
