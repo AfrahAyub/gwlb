@@ -23,7 +23,8 @@ Parameters:
     Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: "ami-05e891ec5e4cbd76f"
   PanoramaInstanceType:
-    Type: String
+    Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Instance::Id>'
+    Default: "m5.2xlarge"
   SshKeyName:
     Type: String
   PanoramaName:
