@@ -13,9 +13,6 @@ Parameters:
   SecVpcId:
     Type: String
     Description: ID of the security VPC
-  SubnetsMap:
-    Type: String
-    Description: Mapping of subnet names to subnet IDs in the security VPC
   FirewallId:
     Type: String
     Description: ID of the firewall instance
@@ -156,7 +153,7 @@ Resources:
   GWLB:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
-      Subnets: !Split [',', !Ref SubnetsMap]
+      Subnets: !Split [',', !Ref SecGwlbeSubnet]
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: '60'
@@ -189,7 +186,7 @@ Resources:
     Properties:
       VpcId: !Ref SecVpcId
       ServiceName: !GetAtt GWLBEndpointService.ServiceName
-      SubnetIds: !Split [',', !Ref SubnetsMap]
+      SubnetIds: !Split [',', !Ref SecGwlbeSubnet]
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
