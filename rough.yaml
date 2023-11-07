@@ -19,10 +19,8 @@ Parameters:
 ### parameters for panorama
   PanoramaPrivateIps:
     Type: List<String>
-  PanoramaSecurityGroup:
-    Type: String
   PanoramaAmi:
-    Type: String
+    Type: "ami-05e891ec5e4cbd76f"
   PanoramaInstanceType:
     Type: String
   SshKeyName:
@@ -203,7 +201,7 @@ Resources:
       PrivateIpAddresses: 
         - PrivateIpAddress: !Select [0, !Ref PanoramaPrivateIps]
       SecurityGroupIds: 
-        - !Ref PanoramaSecurityGroup
+        - !Ref ManagementEC2SecurityGroup
 
   PanoramaInstance:
     Type: "AWS::EC2::Instance"
