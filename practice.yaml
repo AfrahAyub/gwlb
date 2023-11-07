@@ -699,7 +699,7 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref ManagementInternetGateway
 
-  m:
+  ManagementEC2SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for ManagementEC2Instance
