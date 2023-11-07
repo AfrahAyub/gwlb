@@ -10,9 +10,6 @@ Parameters:
     Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 ### parameters for gateway loadbalancer
-  PrefixNameTag:
-    Type: String
-    Description: Prefix to be added to resource names
   SecVpcId:
     Type: String
     Description: ID of the security VPC
@@ -35,12 +32,8 @@ Parameters:
     Type: String
   SshKeyName:
     Type: String
-  PrefixNameTag:
-    Type: String
   PanoramaName:
     Type: String
-  GlobalTags:
-    Type: CommaDelimitedList
 ### parameters for vm-series
   PanoramaIP:
     Type: String
@@ -252,47 +245,6 @@ Resources:
       AllocationId: !GetAtt ElasticIp.AllocationId
       NetworkInterfaceId: !Ref PrivateNetworkInterface
 
-### vm-series
-  ElasticIP:
-    Type: "AWS::EC2::EIP"
-
-  VMInstance:
-    Type: "AWS::EC2::Instance"
-    Properties:
-      InstanceType: !Ref InstanceType
-      KeyName: !Ref SSHKeyName
-      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
-      NetworkInterfaces:
-        - NetworkInterfaceId: !Ref NGFWMgmtENI
-          DeviceIndex: 0
-        - NetworkInterfaceId: !Ref NGFWDataENI
-          DeviceIndex: 1
-      UserData:
-        Fn::Base64: 
-          Fn::Sub: |
-            #!/bin/bash
-            echo "panorama-server=${PanoramaIP}" >> /opt/pancfg/panorama_bootstrap.cfg
-          - PanoramaIP: !Ref PanoramaIP
-
-  NGFWMgmtENI:
-    Type: "AWS::EC2::NetworkInterface"
-    Properties:
-      SubnetId: !Ref MgmtSubnetID
-      PrivateIpAddresses: 
-        - !Select [0, !CidrSplit !Ref NGFWMgmtSubnetCIDR 256]
-      Groups: 
-        - !Ref SecurityGroupID
-      SourceDestCheck: true
-
-  NGFWDataENI:
-    Type: "AWS::EC2::NetworkInterface"
-    Properties:
-      SubnetId: !Ref DataSubnetID
-      PrivateIpAddresses: 
-        - !Select [0, !CidrSplit !Ref NGFWDataSubnetCIDR 256]
-      Groups: 
-        - !Ref SecurityGroupID
-      SourceDestCheck: true
 
 
 ### VPC Resources for Application VPC
