@@ -17,12 +17,8 @@ Parameters:
     Type: String
     Description: ID of the firewall instance
 ### parameters for panorama
-  SubnetId:
-    Type: String
   PanoramaPrivateIps:
     Type: List<String>
-  PanoramaSecurityGroup:
-    Type: String
   PanoramaAmi:
     Type: String
   PanoramaInstanceType:
@@ -201,11 +197,11 @@ Resources:
   PrivateNetworkInterface:
     Type: "AWS::EC2::NetworkInterface"
     Properties:
-      SubnetId: !Ref SubnetId
+      SubnetId: !Ref ManagementSubnet
       PrivateIpAddresses: 
         - PrivateIpAddress: !Select [0, !Ref PanoramaPrivateIps]
       SecurityGroupIds: 
-        - !Ref PanoramaSecurityGroup
+        - !Ref ManagementEC2SecurityGroup
 
   PanoramaInstance:
     Type: "AWS::EC2::Instance"
@@ -703,7 +699,7 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref ManagementInternetGateway
 
-  ManagementEC2SecurityGroup:
+  m:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Security group for ManagementEC2Instance
