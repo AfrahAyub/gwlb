@@ -146,7 +146,6 @@ Resources:
       TargetType: instance
       HealthCheckProtocol: TCP
       HealthCheckPort: 80
-      Name: !Sub '${PrefixNameTag}GatewayLoadBalancerTargetGroup'
 
   GWLbTargetGroupAttachment:
     Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
@@ -157,7 +156,6 @@ Resources:
   GWLB:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
-      Name: !Sub '${PrefixNameTag}GatewayLoadBalancer'
       Subnets: !Split [',', !Ref SubnetsMap]
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
@@ -166,9 +164,6 @@ Resources:
       IpAddressType: ipv4
       EnableCrossZoneLoadBalancing: true
       SecurityGroups: [ !Ref FirewallId ]
-      Tags:
-        - Key: Name
-          Value: !Sub '${PrefixNameTag}GatewayLoadBalancer'
   
   GWLBListener:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
@@ -203,9 +198,6 @@ Resources:
               Service: !GetAtt GWLBEndpointService.ServiceName
             Action: 'ec2:DescribeSecurityGroups'
             Resource: '*'
-      Tags:
-        - Key: Name
-          Value: !Sub '${PrefixNameTag}GatewayLoadBalancerEndpoint'
 
 ### panorama
 
@@ -217,10 +209,6 @@ Resources:
         - PrivateIpAddress: !Select [0, !Ref PanoramaPrivateIps]
       SecurityGroupIds: 
         - !Ref PanoramaSecurityGroup
-      Tags: 
-        - Key: Name
-          Value: !Sub "${PrefixNameTag}${PanoramaName}-primary-interface"
-        - !Ref GlobalTags
 
   PanoramaInstance:
     Type: "AWS::EC2::Instance"
@@ -231,10 +219,6 @@ Resources:
       NetworkInterfaces: 
         - NetworkInterfaceId: !Ref PrivateNetworkInterface
           DeviceIndex: 0
-      Tags: 
-        - Key: Name
-          Value: !Sub "${PrefixNameTag}${PanoramaName}"
-        - !Ref GlobalTags
 
   ElasticIp:
     Type: "AWS::EC2::EIP"
