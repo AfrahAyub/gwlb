@@ -17,16 +17,13 @@ Parameters:
     Type: String
     Description: ID of the firewall instance
 ### parameters for panorama
-  PanoramaPrivateIps:
-    Type: List<String>
   PanoramaAmi: 
     Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: "ami-05e891ec5e4cbd76f"
   PanoramaInstanceType:
-    Type: String
+    Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Instance::Id>'
+    Default: "m5.2xlarge"
   SshKeyName:
-    Type: String
-  PanoramaName:
     Type: String
 ### parameters for vm-series
   PanoramaIP:
@@ -199,8 +196,7 @@ Resources:
     Type: "AWS::EC2::NetworkInterface"
     Properties:
       SubnetId: !Ref ManagementSubnet
-      PrivateIpAddresses: 
-        - PrivateIpAddress: !Select [0, !Ref PanoramaPrivateIps]
+      PrivateIpAddress: 10.4.1.100
       SecurityGroupIds: 
         - !Ref ManagementEC2SecurityGroup
 
