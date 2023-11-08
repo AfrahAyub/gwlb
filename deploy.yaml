@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: '2010-09-09'
+  AWSTemplateFormatVersion: '2010-09-09'
 
 Parameters:
   KeyName:
@@ -13,26 +13,19 @@ Parameters:
   SecVpcId:
     Type: String
     Description: ID of the security VPC
-  SubnetsMap:
-    Type: String
-    Description: Mapping of subnet names to subnet IDs in the security VPC
   FirewallId:
     Type: String
     Description: ID of the firewall instance
 ### parameters for panorama
-  SubnetId:
-    Type: String
   PanoramaPrivateIps:
     Type: List<String>
-  PanoramaSecurityGroup:
-    Type: String
-  PanoramaAmi:
-    Type: String
+  PanoramaAmi: 
+    Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: "ami-05e891ec5e4cbd76f"
   PanoramaInstanceType:
-    Type: String
+    Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Instance::Id>'
+    Default: "m5.2xlarge"
   SshKeyName:
-    Type: String
-  PanoramaName:
     Type: String
 ### parameters for vm-series
   PanoramaIP:
@@ -146,7 +139,6 @@ Resources:
       TargetType: instance
       HealthCheckProtocol: TCP
       HealthCheckPort: 80
-      Name: !Sub '${PrefixNameTag}GatewayLoadBalancerTargetGroup'
 
   GWLbTargetGroupAttachment:
     Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
@@ -157,8 +149,7 @@ Resources:
   GWLB:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
-      Name: !Sub '${PrefixNameTag}GatewayLoadBalancer'
-      Subnets: !Split [',', !Ref SubnetsMap]
+      Subnets: !Split [',', !Ref SecGwlbeSubnet]
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: '60'
@@ -166,9 +157,6 @@ Resources:
       IpAddressType: ipv4
       EnableCrossZoneLoadBalancing: true
       SecurityGroups: [ !Ref FirewallId ]
-      Tags:
-        - Key: Name
-          Value: !Sub '${PrefixNameTag}GatewayLoadBalancer'
   
   GWLBListener:
     Type: 'AWS::ElasticLoadBalancingV2::Listener'
@@ -194,7 +182,7 @@ Resources:
     Properties:
       VpcId: !Ref SecVpcId
       ServiceName: !GetAtt GWLBEndpointService.ServiceName
-      SubnetIds: !Split [',', !Ref SubnetsMap]
+      SubnetIds: !Split [',', !Ref SecGwlbeSubnet]
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -203,24 +191,17 @@ Resources:
               Service: !GetAtt GWLBEndpointService.ServiceName
             Action: 'ec2:DescribeSecurityGroups'
             Resource: '*'
-      Tags:
-        - Key: Name
-          Value: !Sub '${PrefixNameTag}GatewayLoadBalancerEndpoint'
 
 ### panorama
 
   PrivateNetworkInterface:
     Type: "AWS::EC2::NetworkInterface"
     Properties:
-      SubnetId: !Ref SubnetId
+      SubnetId: !Ref ManagementSubnet
       PrivateIpAddresses: 
         - PrivateIpAddress: !Select [0, !Ref PanoramaPrivateIps]
       SecurityGroupIds: 
-        - !Ref PanoramaSecurityGroup
-      Tags: 
-        - Key: Name
-          Value: !Sub "${PrefixNameTag}${PanoramaName}-primary-interface"
-        - !Ref GlobalTags
+        - !Ref ManagementEC2SecurityGroup
 
   PanoramaInstance:
     Type: "AWS::EC2::Instance"
@@ -231,10 +212,6 @@ Resources:
       NetworkInterfaces: 
         - NetworkInterfaceId: !Ref PrivateNetworkInterface
           DeviceIndex: 0
-      Tags: 
-        - Key: Name
-          Value: !Sub "${PrefixNameTag}${PanoramaName}"
-        - !Ref GlobalTags
 
   ElasticIp:
     Type: "AWS::EC2::EIP"
@@ -244,48 +221,6 @@ Resources:
     Properties:
       AllocationId: !GetAtt ElasticIp.AllocationId
       NetworkInterfaceId: !Ref PrivateNetworkInterface
-
-### vm-series
-  ElasticIP:
-    Type: "AWS::EC2::EIP"
-
-  VMInstance:
-    Type: "AWS::EC2::Instance"
-    Properties:
-      InstanceType: !Ref InstanceType
-      KeyName: !Ref SSHKeyName
-      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
-      NetworkInterfaces:
-        - NetworkInterfaceId: !Ref NGFWMgmtENI
-          DeviceIndex: 0
-        - NetworkInterfaceId: !Ref NGFWDataENI
-          DeviceIndex: 1
-      UserData:
-        Fn::Base64: 
-          Fn::Sub: |
-            #!/bin/bash
-            echo "panorama-server=${PanoramaIP}" >> /opt/pancfg/panorama_bootstrap.cfg
-          - PanoramaIP: !Ref PanoramaIP
-
-  NGFWMgmtENI:
-    Type: "AWS::EC2::NetworkInterface"
-    Properties:
-      SubnetId: !Ref MgmtSubnetID
-      PrivateIpAddresses: 
-        - !Select [0, !CidrSplit !Ref NGFWMgmtSubnetCIDR 256]
-      Groups: 
-        - !Ref SecurityGroupID
-      SourceDestCheck: true
-
-  NGFWDataENI:
-    Type: "AWS::EC2::NetworkInterface"
-    Properties:
-      SubnetId: !Ref DataSubnetID
-      PrivateIpAddresses: 
-        - !Select [0, !CidrSplit !Ref NGFWDataSubnetCIDR 256]
-      Groups: 
-        - !Ref SecurityGroupID
-      SourceDestCheck: true
 
 
 
