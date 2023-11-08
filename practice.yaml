@@ -19,7 +19,7 @@ Parameters:
 ### parameters for panorama
   PanoramaPrivateIps:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Privateip::Id>'
-    Default: ["10.4.1.100"]
+    Default: "10.4.1.100"
   PanoramaAmi: 
     Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: "ami-05e891ec5e4cbd76f"
