@@ -11,10 +11,8 @@ Parameters:
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 ### parameters for gateway loadbalancer
   SecVpcId:
-    Description: The ID of the SecurityVPC
-    Value: !Ref SecVPC
-    Export:
-      Name: SecVpcId
+    Type: String
+    Description: ID of the security VPC
   FirewallId:
     Type: String
     Description: ID of the firewall instance
@@ -29,12 +27,6 @@ Parameters:
     Default: "m5.2xlarge"
   SshKeyName:
     Type: String
-  PanoramaName:
-    Type: String
-### parameters for vm-series
-  PanoramaIP:
-    Type: String
-    Description: "Panorama server IP address"
 
 Resources:
   TransitGateway:
