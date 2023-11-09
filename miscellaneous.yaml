@@ -1,4 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
+
 Parameters:
   KeyName:
     Type: 'AWS::EC2::KeyPair::KeyName'
@@ -10,15 +11,16 @@ Parameters:
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 ### parameters for gateway loadbalancer
   SecVpcId:
-    Type: String
-    Description: ID of the security VPC
+    Description: The ID of the SecurityVPC
+    Value: !Ref SecVPC
+    Export:
+      Name: SecVpcId
   FirewallId:
     Type: String
     Description: ID of the firewall instance
 ### parameters for panorama
   PanoramaPrivateIps:
     Type: List<String>
-    Description: private ips
   PanoramaAmi: 
     Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: "ami-05e891ec5e4cbd76f"
@@ -224,47 +226,7 @@ Resources:
       AllocationId: !GetAtt ElasticIp.AllocationId
       NetworkInterfaceId: !Ref PrivateNetworkInterface
 
-### vm-series
-  ElasticIP:
-    Type: "AWS::EC2::EIP"
 
-  VMInstance:
-    Type: "AWS::EC2::Instance"
-    Properties:
-      InstanceType: !Ref InstanceType
-      KeyName: !Ref SSHKeyName
-      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
-      NetworkInterfaces:
-        - NetworkInterfaceId: !Ref NGFWMgmtENI
-          DeviceIndex: 0
-        - NetworkInterfaceId: !Ref NGFWDataENI
-          DeviceIndex: 1
-      UserData:
-        Fn::Base64: 
-          Fn::Sub: |
-            #!/bin/bash
-            echo "panorama-server=${PanoramaIP}" >> /opt/pancfg/panorama_bootstrap.cfg
-          - PanoramaIP: !Ref PanoramaIP
-
-  NGFWMgmtENI:
-    Type: "AWS::EC2::NetworkInterface"
-    Properties:
-      SubnetId: !Ref MgmtSubnetID
-      PrivateIpAddresses: 
-        - !Select [0, !CidrSplit !Ref NGFWMgmtSubnetCIDR 256]
-      Groups: 
-        - !Ref SecurityGroupID
-      SourceDestCheck: true
-
-  NGFWDataENI:
-    Type: "AWS::EC2::NetworkInterface"
-    Properties:
-      SubnetId: !Ref DataSubnetID
-      PrivateIpAddresses: 
-        - !Select [0, !CidrSplit !Ref NGFWDataSubnetCIDR 256]
-      Groups: 
-        - !Ref SecurityGroupID
-      SourceDestCheck: true
 
 ### VPC Resources for Application VPC
   
@@ -775,3 +737,5 @@ Outputs:
   AppbEC2InstancePublicIP:
     Value: !GetAtt AppbEC2Instance.PublicIp
     Description: Public IP address of AppbEC2Instance
+
+ 
