@@ -123,13 +123,6 @@ Resources:
         - Key: Name
           Value: ManagementSubnet
 ### gateway loadbalancer
-
-  SecVpcId:
-    Description: The ID of the Security VPC
-    Value: !Ref SecVPC  
-    Export:
-      Name:SecVpcId
-
   GWLBTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
     Properties:
@@ -567,6 +560,12 @@ Resources:
       Tags:
         - Key: Name
           Value: sec-vpc
+
+  SecVpcId:
+    Description: The ID of the Security VPC
+    Value: !Ref SecVPC  
+    Export:
+      Name:SecVpcId
 
   SecGwlbeSubnet:
     Type: AWS::EC2::Subnet
