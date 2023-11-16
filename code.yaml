@@ -1,0 +1,940 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  KeyName:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    Description: Name of the KeyPair used for EC2 instances
+    ConstraintDescription: 'Must be the name of an existing EC2 KeyPair.'
+  
+  LatestAmiId:
+    Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+### parameters for gateway loadbalancer
+  SecVpcId:
+    Type: String
+    Description: ID of the security VPC
+  FirewallId:
+    Type: String
+    Description: ID of the firewall instance
+### parameters for panorama
+  PanoramaPrivateIps:
+    Type: List<String>
+  PanoramaAmi: 
+    Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: "ami-05e891ec5e4cbd76f"
+  PanoramaInstanceType:
+    Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Instance::Id>'
+    Default: "m5.2xlarge"
+  SshKeyName:
+    Type: String
+
+###parameters for vm-series
+  AccountNumbers : 
+    Description : "List of Account Numbers",
+    Type : "CommaDelimitedList"
+
+  VpcCidr : 
+    Description : "Cidr of newly created VPC",
+    Type : "String",
+    MinLength: "9",
+    MaxLength: "18",
+    AllowedPattern : "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+    ConstraintDescription : "must be a valid CIDR range of the form x.x.x.x/x. For Appliance Gateway support, it has to be a /25 cidr."
+    
+  KeyPANWFirewall: 
+    Type : "String",
+    Description: "API Key associated to username/password of the VM-Series Firewall. By default it is pandemo/demopassword. Link to how to generate API key: https://docs.paloaltonetworks.com/pan-os/10-0/pan-os-panorama-api/get-started-with-the-pan-os-xml-api/get-your-api-key.html",
+    Default: "LUFRPT1Zd2pYUGpkMUNrVEZlb3hROEQyUm95dXNGRkU9N0d4RGpTN2VZaVZYMVVoS253U0p6dlk3MkM0SDFySEh2UUR4Y3hzK2g3ST0=",
+    AllowedPattern: "[\\S0-9a-zA-Z]+",
+    ConstraintDescription : "The PAN FW API key is required.",
+    NoEcho : "true"
+
+  KeyPANWPanorama: 
+    Type : "String",
+    Description: "API Key associated to username/password of the Panorama. Link to how to generate API key: https://docs.paloaltonetworks.com/pan-os/10-0/pan-os-panorama-api/get-started-with-the-pan-os-xml-api/get-your-api-key.html",
+    NoEcho : "true"  
+
+  PanoramaAdminUser: 
+    Type : "String",
+    Description: "Enter the admin username for the Panorama instance",
+    MinLength : "3",
+    MaxLength : "63"
+
+  BootstrapS3Bucket: 
+    Type : "String",
+    Description: "Enter the name of the Bootstrap S3 bucket for the VM-Series firewall",
+    MinLength : "3",
+    MaxLength : "63"  
+  
+
+  PanFwAmiId: 
+    Type: "AWS::EC2::Image::Id",
+    Description: "Link to Ami Id lookup table: https://www.paloaltonetworks.com/documentation/global/compatibility-matrix/vm-series-firewalls/aws-cft-amazon-machine-images-ami-list"
+
+  KeyName : 
+    Description : "Amazon EC2 Key Pair",
+    Type : "AWS::EC2::KeyPair::KeyName"
+
+  FWInstanceType: 
+    Type: "String",
+    Default: "m4.xlarge",
+    AllowedValues: 
+      [
+        "m5.xlarge",
+        "m4.xlarge",
+        "m4.2xlarge",
+        "m4.4xlarge",
+        "m3.xlarge",
+        "m3.2xlarge",
+        "c4.xlarge",
+        "c4.2xlarge",
+        "c4.4xlarge",
+        "c3.xlarge",
+        "c3.2xlarge",
+        "c3.4xlarge"
+      ],
+    Description: "Enter the instance type and size that you want for the AutoScaled VM-Series firewall"
+    
+  NumberOfAZs: 
+    Description : "Total Number of AZs which will be used in this deployment (minimum 2 zones)",
+    Type : "Number",
+        "MinValue" : "2",
+        "Default" : "2",
+        "MaxValue" : "4"  
+
+  VpcAzs: 
+    Type: "List<AWS::EC2::AvailabilityZone::Name>",
+    Description: "Enter the list of Availability Zones (Based on Number of AZs above)"   
+
+  TGWId: 
+    Type: "String",
+    Description: "Enter the Id of Transit Gateway if need to protect east west and outbound traffic."     
+  
+  LambdaS3Bucket: 
+    Type : "String",
+    Description: "VM-Series firewall Lambda/Scripts/CFT template S3 Bucket or your own in the same region",
+    MinLength : "3",
+    MaxLength : "63"
+
+  Debug: 
+    Type: "String",
+    Default: "No",
+    AllowedValues: [
+        "Yes",
+        "No"
+      ],
+    Description: "Enable/Disable debug. Default is disabled"  
+
+Mappings: 
+  BucketRegionMap : 
+    LambdaRegion      : { "DefaultRegion": "panw-aws-autoscale-v30" }
+    KeyMap : 
+      "Key"     : { "Key": "panw-aws.zip" }
+
+  ASGScaleMap" : 
+    MaxInstances        : { "ASG": "5" },
+    ScaleUpThreshold    : {"ASG": "80" },
+    ScaleDownThreshold  : {"ASG": "20" },
+    ScalingParam        : {"CPU": "DataPlaneCPUUtilizationPct", "AS": "panSessionActive", "SU": "panSessionUtilization", "SSPU":"panSessionSslProxyUtilization", "GPU": "panGPGatewayUtilizationPct", "GPAT": "panGPGWUtilizationActiveTunnels", "DPB": "DataPlanePacketBufferUtilization"},
+    ScalingPeriod        : {"ASG": "900" }    
+
+
+Conditions : 
+  PANWScript : {"Fn::Equals" : [ {"Ref": "LambdaS3Bucket" }, { "Fn::FindInMap" : [ "BucketRegionMap", "LambdaRegion", "DefaultRegion" ]}]},
+  CreateSubnet2more : {"Fn::Or": [ {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "2"]}, {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "3"]}, {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "4"]}]},
+  CreateSubnet3more : { "Fn::Or": [ {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "3"]}, {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "4"]}]},
+  CreateSubnet1 : {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "1"]},
+  CreateSubnet2 : {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "2"]},
+  CreateSubnet3 : {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "3"]},
+  CreateSubnet4 : {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "4"]},
+  CreateTGW : {"Fn::Not" : [ {"Fn::Equals" : [{"Ref" : "TGWId"}, ""]}]},
+  CreateTGWSubnet1more:  { "Fn::And": [ {"Fn::Or": [ {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "1"]}, {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "2"]}, {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "3"]}, {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "4"]}]}, {"Fn::Not" : [ {"Fn::Equals" : [{"Ref" : "TGWId"}, ""]}]}]},
+  CreateTGWSubnet2more:  { "Fn::And": [ {"Fn::Or": [ {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "2"]}, {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "3"]}, {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "4"]}]}, {"Fn::Not" : [ {"Fn::Equals" : [{"Ref" : "TGWId"}, ""]}]}]},
+  CreateTGWSubnet3more:  { "Fn::And": [ { "Fn::Or":[ {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "3"]}, {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "4"]}]}, {"Fn::Not" : [ {"Fn::Equals" : [{"Ref" : "TGWId"}, ""]}]}]},
+  CreateTGWSubnet1:  { "Fn::And": [ {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "1"]}, {"Fn::Not" : [ {"Fn::Equals" : [{"Ref" : "TGWId"}, ""]}]} ]},
+  CreateTGWSubnet2: { "Fn::And": [ {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "2"]}, {"Fn::Not" : [ {"Fn::Equals" : [{"Ref" : "TGWId"}, ""]}]} ]},
+  CreateTGWSubnet3: { "Fn::And": [ {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "3"]}, {"Fn::Not" : [ {"Fn::Equals" : [{"Ref" : "TGWId"}, ""]}]} ]},
+  CreateTGWSubnet4: { "Fn::And": [ {"Fn::Equals" : [{"Ref" : "NumberOfAZs"}, "4"]}, {"Fn::Not" : [ {"Fn::Equals" : [{"Ref" : "TGWId"}, ""]}]} ]}
+
+Metadata : 
+  AWS::CloudFormation::Interface : 
+    ParameterGroups" : [
+      {
+        "Label" : {"default": "VPC Configuration"},
+        "Parameters" : [ "NumberOfAZs", "VpcAzs", "VpcCidr"]
+      },    
+      {
+        "Label" : {"default": "VM-Series firewall Instance configuration"},
+        "Parameters" : ["PanFwAmiId", "KeyName", "FWInstanceType","Debug"]
+      },
+      {
+        "Label" : {"default": "S3 Bucket details"},
+        "Parameters" : ["BootstrapS3Bucket", "LambdaS3Bucket"]
+      },
+      {
+        "Label" : {"default": "VM-Series API Key and Panorama username"},
+        "Parameters" : ["KeyPANWFirewall", "KeyPANWPanorama", "PanoramaAdminUser"]
+      },
+      {
+        "Label" : {"default": "Other Parameters"},
+        "Parameters" : ["AccountNumbers", "TGWId"]
+      }
+      ]
+    ParameterLabels : 
+      PanFwAmiId: {"default": "AMIId of PANFW Image:"},
+      KeyName: {"default": "Key pair:"},
+      FWInstanceType : {"default": "Firewall Instance Type:"},
+      BootstrapS3Bucket: {"default": "Bootstrap bucket for VM-Series firewalls"},
+      LambdaS3Bucket: {"default": "S3 Bucket Name for Lambda Code:"},
+      KeyPANWFirewall: {"default": "API Key for Firewall:"},
+      KeyPANWPanorama: {"default": "API Key for Panorama:"},
+      PanoramaAdminUser: {"default": "Admin username for Panorama:"},
+      VpcAzs: {"default": "Select AZs:"},
+      NumberOfAZs: {"default": "Number of AZs:"},
+      VpcCidr: {"default": "VPC CIDR:"},
+      AZSubnetIDTrust: {"default": "Subnet ID of Trust Interface:"},
+      Debug: {"default": "Enable Debug Log:"},
+      TGWId : {"default": "Transit Gateway Id:"},
+      AccountNumbers: {"default": "Account Numbers"}
+
+Resources:
+  TransitGateway:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+      Description: Transit Gateway for VPC connectivity
+      DefaultRouteTableAssociation: disable
+      DefaultRouteTablePropagation: disable
+
+  FromAppbVpcsRouteTable:
+    Type: AWS::EC2::TransitGatewayRouteTable
+    Properties:
+      TransitGatewayId: !Ref TransitGateway
+      Tags:
+        - Key: Name
+          Value: from-app-vpcs
+
+  FromSecVpcRouteTable:
+    Type: AWS::EC2::TransitGatewayRouteTable
+    Properties:
+      TransitGatewayId: !Ref TransitGateway
+      Tags:
+        - Key: Name
+          Value: from-sec-vpc
+
+  AppbVpcTgwAttachAssociation:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    Properties: 
+      TransitGatewayAttachmentId: !Ref AppbTgwAttachment
+      TransitGatewayRouteTableId: !Ref FromAppbVpcsRouteTable
+
+  AttVpcTgwAttachAssociation:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    Properties: 
+      TransitGatewayAttachmentId: !Ref AttTgwAttachment
+      TransitGatewayRouteTableId: !Ref FromAppbVpcsRouteTable
+
+  SecVpcTgwAttachAssociation:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    Properties: 
+      TransitGatewayAttachmentId: !Ref SecTgwAttachment
+      TransitGatewayRouteTableId: !Ref FromSecVpcRouteTable
+
+  FromSecVpcRoute1:
+    Type: AWS::EC2::TransitGatewayRoute
+    Properties:
+      TransitGatewayRouteTableId: !Ref FromSecVpcRouteTable
+      DestinationCidrBlock: 10.0.0.0/16
+      TransitGatewayAttachmentId: !Ref AppbTgwAttachment
+
+  FromSecVpcRoute2:
+    Type: AWS::EC2::TransitGatewayRoute
+    Properties:
+      TransitGatewayRouteTableId: !Ref FromSecVpcRouteTable
+      DestinationCidrBlock: 10.1.0.0/16
+      TransitGatewayAttachmentId: !Ref AttTgwAttachment
+
+  FromAppbVpcsRoute1:
+    Type: AWS::EC2::TransitGatewayRoute
+    Properties:
+      TransitGatewayRouteTableId: !Ref FromAppbVpcsRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      TransitGatewayAttachmentId: !Ref SecTgwAttachment
+
+  FromAppbVpcsRoute2:
+    Type: AWS::EC2::TransitGatewayRoute
+    Properties:
+      TransitGatewayRouteTableId: !Ref FromAppbVpcsRouteTable
+      DestinationCidrBlock: 10.1.0.0/16
+      TransitGatewayAttachmentId: !Ref AttTgwAttachment
+
+  FromAppbVpcsRoute3:
+    Type: AWS::EC2::TransitGatewayRoute
+    Properties:
+      TransitGatewayRouteTableId: !Ref FromAppbVpcsRouteTable
+      DestinationCidrBlock: 10.0.0.0/16
+      TransitGatewayAttachmentId: !Ref AppbTgwAttachment
+
+  ManagementVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.2.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: ManagementVPC
+
+  ManagementSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ManagementVpc
+      CidrBlock: 10.2.0.0/24
+      AvailabilityZone: us-east-1a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: ManagementSubnet
+### gateway loadbalancer
+  GWLBTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Protocol: GENEVE
+      Port: 6081
+      VpcId: !Ref SecVpcId
+      TargetType: instance
+      HealthCheckProtocol: TCP
+      HealthCheckPort: 80
+
+  GWLbTargetGroupAttachment:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
+    Properties:
+      TargetGroupArn: !Ref GWLBTargetGroup
+      TargetId: !Ref FirewallId
+  
+  GWLB:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      Subnets: !Split [',', !Ref SecGwlbeSubnet]
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: '60'
+      LoadBalancerType: gateway
+      IpAddressType: ipv4
+      EnableCrossZoneLoadBalancing: true
+      SecurityGroups: [ !Ref FirewallId ]
+  
+  GWLBListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref GWLBTargetGroup
+      LoadBalancerArn: !Ref GWLB
+      Port: 6081
+      Protocol: GENEVE
+
+  GWLBEndpointService:
+    Type: 'AWS::EC2::VPCEndpointService'
+    Properties:
+      NetworkLoadBalancerArns:
+        - !GetAtt GWLB.LoadBalancerArn
+      AcceptanceRequired: false
+      GatewayLoadBalancerArns:
+        - !Ref GWLB
+
+  GWLBEndpoint:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Properties:
+      VpcId: !Ref SecVpcId
+      ServiceName: !GetAtt GWLBEndpointService.ServiceName
+      SubnetIds: !Split [',', !Ref SecGwlbeSubnet]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: !GetAtt GWLBEndpointService.ServiceName
+            Action: 'ec2:DescribeSecurityGroups'
+            Resource: '*'
+
+### panorama
+
+  PrivateNetworkInterface:
+    Type: "AWS::EC2::NetworkInterface"
+    Properties:
+      SubnetId: !Ref ManagementSubnet
+      PrivateIpAddresses: 
+        - PrivateIpAddress: !Select [0, !Ref PanoramaPrivateIps]
+      SecurityGroupIds: 
+        - !Ref ManagementEC2SecurityGroup
+
+  PanoramaInstance:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      ImageId: !Ref PanoramaAmi
+      InstanceType: !Ref PanoramaInstanceType
+      KeyName: !Ref SshKeyName
+      NetworkInterfaces: 
+        - NetworkInterfaceId: !Ref PrivateNetworkInterface
+          DeviceIndex: 0
+
+  ElasticIp:
+    Type: "AWS::EC2::EIP"
+
+  ElasticIpAssociation:
+    Type: "AWS::EC2::EIPAssociation"
+    Properties:
+      AllocationId: !GetAtt ElasticIp.AllocationId
+      NetworkInterfaceId: !Ref PrivateNetworkInterface
+
+
+
+### VPC Resources for Application VPC
+  
+  AppbVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: app-vpc
+
+  AppbInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: app-vpc-igw
+
+  AppbVPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref AppbVPC
+      InternetGatewayId: !Ref AppbInternetGateway
+
+  AppbAppSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AppbVPC
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
+      Tags:
+        - Key: Name
+          Value: appb-vpc-app-subnet
+
+  AppbTgwSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AppbVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
+      Tags:
+        - Key: Name
+          Value: appb-vpc-tgw-subnet
+
+  AppbGwlbeSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AppbVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
+      Tags:
+        - Key: Name
+          Value: appb-vpc-gwlbe-subnet
+
+  AppbAppRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AppbVPC
+      Tags:
+        - Key: Name
+          Value: appb-vpc-app-rt
+
+  AppbGwlbeRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AppbVPC
+      Tags:
+        - Key: Name
+          Value: appb-vpc-gwlbe-rt
+
+  AppbIgwRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AppbVPC
+      Tags:
+        - Key: Name
+          Value: appb-vpc-igw-rt
+
+  AppbAppSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppbAppSubnet
+      RouteTableId: !Ref AppbAppRouteTable
+
+  AppbGwlbeSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppbGwlbeSubnet
+      RouteTableId: !Ref AppbGwlbeRouteTable
+
+  AppbIgwRouteTableAssociation:
+    Type: AWS::EC2::GatewayRouteTableAssociation
+    Properties:
+      GatewayId: !Ref AppbInternetGateway
+      RouteTableId: !Ref AppbIgwRouteTable
+
+  AppbInternetRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AppbAppRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref AppbInternetGateway
+
+  AppbAttRoute:
+    Type: AWS::EC2::Route
+    DependsOn:
+      - AppbTgwAttachment
+    Properties:
+      RouteTableId: !Ref AppbAppRouteTable
+      DestinationCidrBlock: 10.1.0.0/16
+      TransitGatewayId: !Ref TransitGateway
+
+  AppbEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for AppbEC2Instance
+      VpcId: !Ref AppbVPC
+      SecurityGroupIngress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 10.1.0.0/16
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 10.1.0.0/16
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 0
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: appb-vpc-sg
+
+  AppbEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId  # Enter the appropriate AMI ID
+      InstanceType: t2.micro  # Enter the desired instance type
+      KeyName: !Ref KeyName  #!Join ['', [!FindInMap [KeyPairMap, qwikLABS, KeyNamePrefix], !Ref 'AWS::AccountId']]
+      NetworkInterfaces:
+        - PrivateIpAddress: 10.0.0.10  # Enter the desired private IP address
+          AssociatePublicIpAddress: True
+          SubnetId: !Ref AppbAppSubnet
+          DeviceIndex: 0
+          GroupSet:
+            - !Ref AppbEC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: appb-svr
+      UserData:
+        Fn::Base64: IyEvYmluL2Jhc2gKCiMgVXBkYXRlIGhvc3RuYW1lIGZvciBiZXR0ZXIgaWRlbnRpZmljYXRpb24Kc3VkbyBob3N0bmFtZSB2dWwtYXBwLXNlcnZlcgoKIyBVcGRhdGluZyB5dW0gcmVwb3NpdG9yaWVzCnN1ZG8geXVtIHVwZGF0ZSAteQoKIyBJbnN0YWxsaW5nIERvY2tlcgpzdWRvIGFtYXpvbi1saW51eC1leHRyYXMgaW5zdGFsbCBkb2NrZXIgLXkKc3VkbyB5dW0gaW5zdGFsbCAteSBkb2NrZXIKCiMgU3RhcnRpbmcgRG9ja2VyCnN1ZG8gc2VydmljZSBkb2NrZXIgc3RhcnQKc3VkbyBzeXN0ZW1jdGwgZW5hYmxlIGRvY2tlcgpzdWRvIHVzZXJtb2QgLWEgLUcgZG9ja2VyIGVjMi11c2VyCnN1ZG8gZG9ja2VyIGluZm8KCiMgRG93bmxvYWRpbmcgYW5kIFJ1bm5pbmcgdGhlIFZ1bG5lcmFibGUgQXBwIFNlcnZlciBEZW1vIEFwcApzdWRvIGRvY2tlciBjb250YWluZXIgcnVuIC1pdGQgLS1ybSAtLW5hbWUgdnVsLWFwcC0xIC1wIDgwODA6ODA4MCB1cy5nY3IuaW8vcGFudy1nY3AtdGVhbS10ZXN0aW5nL3F3aWtsYWIvcGNjLWxvZzRzaGVsbC9sNHMtZGVtby1hcHA6MS4wCgojIFVwZGF0aW5nIHRoZSAvZXRjL2hvc3RzIGZpbGUgdG8gYWRkIGEgRE5TIGVudHJ5IGZvciB0aGUgYXR0YWNrIHNlcnZlcgojIENvbW1lbnRpbmcgdGhpcyBmb3Igbm93IGFzIHRoZSBlbnRyeSBpcyBub3QgYWRkZWQgYXMgaW50ZW5kZWQgYXQgdGhlIHRpbWUgb2Ygc2VydmVyIGJyaW5ndXAuIE5lZWQgdG8KIyByZXZpc2l0IHRoaXMgcGxhY2UgbGF0ZXIuCiMgc3VkbyBkb2NrZXIgZXhlYyAtaXQgdnVsLWFwcC0xIC9iaW4vc2ggLWMgJ2VjaG8gIjEwLjEuMC4xMCAgICBhdHQtc3ZyIiA+PiAvZXRjL2hvc3RzJw==
+
+  AppbTgwAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !Ref AppbVPC
+      SubnetIds:
+        - !Ref AppbTgwSubnet
+
+### VPC Resources for Attack VPC
+
+  AttVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.1.0.0/16
+      Tags:
+        - Key: Name
+          Value: att-vpc
+
+  AttInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: att-vpc-igw
+
+  AttVPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref AttVPC
+      InternetGatewayId: !Ref AttInternetGateway
+
+  AttAppSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AttVPC
+      CidrBlock: 10.1.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
+      Tags:
+        - Key: Name
+          Value: att-vpc-app-subnet
+
+  AttTgwSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AttVPC
+      CidrBlock: 10.1.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
+      Tags:
+        - Key: Name
+          Value: att-vpc-tgw-subnet
+
+  AttGwlbeSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref AttVPC
+      CidrBlock: 10.1.2.0/24
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
+      Tags:
+        - Key: Name
+          Value: att-vpc-gwlbe-subnet
+
+  AttAppRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AttVPC
+      Tags:
+        - Key: Name
+          Value: att-vpc-app-rt
+
+  AttIgwRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AttVPC
+      Tags:
+        - Key: Name
+          Value: att-vpc-igw-rt
+
+  AttGwlbeRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref AttVPC
+      Tags:
+        - Key: Name
+          Value: att-vpc-gwlbe-rt
+
+  AttAppSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AttAppSubnet
+      RouteTableId: !Ref AttAppRouteTable
+
+  AttGwlbeSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AttGwlbeSubnet
+      RouteTableId: !Ref AttGwlbeRouteTable
+
+  AttIgwRouteTableAssociation:
+    Type: AWS::EC2::GatewayRouteTableAssociation
+    Properties:
+      GatewayId: !Ref AttInternetGateway
+      RouteTableId: !Ref AttIgwRouteTable
+
+  AttInternetRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref AttAppRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref AttInternetGateway
+
+  AttVulRoute:
+    Type: AWS::EC2::Route
+    DependsOn:
+      - AttTgwAttachment
+    Properties:
+      RouteTableId: !Ref AttAppRouteTable
+      DestinationCidrBlock: 10.0.0.0/16
+      TransitGatewayId: !Ref TransitGateway
+
+  AttEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for AttEC2Instance
+      VpcId: !Ref AttVPC
+      SecurityGroupIngress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 10.0.0.0/16
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 1389
+          ToPort: 1389
+          CidrIp: 10.0.0.0/16
+        - IpProtocol: tcp
+          FromPort: 8888
+          ToPort: 8888
+          CidrIp: 10.0.0.0/16
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 0
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: att-vpc-sg
+
+  AttEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId  # Enter the appropriate AMI ID
+      InstanceType: t2.micro  # Enter the desired instance type
+      KeyName: !Ref KeyName  #!Join ['', [!FindInMap [KeyPairMap, qwikLABS, KeyNamePrefix], !Ref 'AWS::AccountId']]
+      NetworkInterfaces:
+        - PrivateIpAddress: 10.1.0.10  # Enter the desired private IP address
+          AssociatePublicIpAddress: True
+          SubnetId: !Ref AttAppSubnet
+          DeviceIndex: 0
+          GroupSet:
+            - !Ref AttEC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: att-svr
+      UserData:
+        Fn::Base64: IyEvYmluL2Jhc2gKCiMgVXBkYXRlIGhvc3RuYW1lIGZvciBiZXR0ZXIgaWRlbnRpZmljYXRpb24Kc3VkbyBob3N0bmFtZSBhdHQtYXBwLXNlcnZlcgoKIyBVcGRhdGluZyB5dW0gcmVwb3NpdG9yaWVzCnN1ZG8geXVtIHVwZGF0ZSAteQoKIyBJbnN0YWxsaW5nIERvY2tlcgpzdWRvIGFtYXpvbi1saW51eC1leHRyYXMgaW5zdGFsbCBkb2NrZXIgLXkKc3VkbyB5dW0gaW5zdGFsbCBkb2NrZXIgLXkKCiMgU3RhcnRpbmcgRG9ja2VyCnN1ZG8gc2VydmljZSBkb2NrZXIgc3RhcnQKc3VkbyBzeXN0ZW1jdGwgZW5hYmxlIGRvY2tlcgpzdWRvIHVzZXJtb2QgLWEgLUcgZG9ja2VyIHVidW50dQpzdWRvIGRvY2tlciBpbmZvCgojIERvd25sb2FkaW5nIGFuZCBSdW5uaW5nIHRoZSBBdHRhY2sgQXBwIFNlcnZlciBEZW1vIEFwcApzdWRvIGRvY2tlciBjb250YWluZXIgcnVuIC1pdGQgLS1ybSAtLW5hbWUgYXR0LXN2ciAtcCA4ODg4Ojg4ODggLXAgMTM4OToxMzg5IHVzLmdjci5pby9wYW53LWdjcC10ZWFtLXRlc3RpbmcvcXdpa2xhYi9wY2MtbG9nNHNoZWxsL2w0cy1kZW1vLXN2cjoxLjA=
+
+  AttTgwAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !Ref AttVPC
+      SubnetIds:
+        - !Ref AttTgwSubnet
+
+### VPC Resources for Security VPC
+
+  SecVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.2.0.0/16
+      Tags:
+        - Key: Name
+          Value: sec-vpc
+
+  SecGwlbeSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecVPC
+      CidrBlock: 10.2.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
+      Tags:
+        - Key: Name
+          Value: sec-vpc-gwlbe-subnet
+
+  SecTgwSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SecVPC
+      CidrBlock: 10.2.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
+      Tags:
+        - Key: Name
+          Value: sec-vpc-tgw-subnet
+
+  SecGwlbeRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecVPC
+      Tags:
+        - Key: Name
+          Value: sec-vpc-gwlbe-rt
+
+  SecTgwRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SecVPC
+      Tags:
+        - Key: Name
+          Value: sec-vpc-tgw-rt
+
+  SecGwlbeSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SecGwlbeSubnet
+      RouteTableId: !Ref SecGwlbeRouteTable
+
+  SecTgwSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SecTgwSubnet
+      RouteTableId: !Ref SecTgwRouteTable
+
+  SecTgwAttachment:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      TransitGatewayId: !Ref TransitGateway
+      VpcId: !Ref SecVPC
+      SubnetIds:
+        - !Ref SecTgwSubnet
+
+  SecVulRoute:
+    Type: AWS::EC2::Route
+    DependsOn:
+      - SecTgwAttachment
+    Properties:
+      RouteTableId: !Ref SecGwlbeRouteTable
+      DestinationCidrBlock: 10.0.0.0/16
+      TransitGatewayId: !Ref TransitGateway
+
+  SecAttRoute:
+    Type: AWS::EC2::Route
+    DependsOn:
+      - SecTgwAttachment
+    Properties:
+      RouteTableId: !Ref SecGwlbeRouteTable
+      DestinationCidrBlock: 10.1.0.0/16
+      TransitGatewayId: !Ref TransitGateway
+
+### VPC Resources for Management VPC
+  
+  ManagementVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.3.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: ManagementVPC
+
+  ManagementSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ManagementVPC
+      CidrBlock: 10.3.0.0/24
+      AvailabilityZone: !Select [0, !GetAZs 'us-east-1']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: ManagementSubnet
+
+  ManagementInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: mgmt-vpc-igw
+
+  ManagementVPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref ManagementVPC
+      InternetGatewayId: !Ref ManagementInternetGateway
+
+  ManagementRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ManagementVPC
+      Tags:
+        - Key: Name
+          Value: mgmt-vpc-rt
+
+  ManagementSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref ManagementSubnet
+      RouteTableId: !Ref ManagementRouteTable
+
+  ManagementInternetRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref ManagementRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref ManagementInternetGateway
+
+  ManagementEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for ManagementEC2Instance
+      VpcId: !Ref ManagementVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: mgmt-vpc-sg
+
+  ManagementEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId  # Enter the appropriate AMI ID
+      InstanceType: t2.micro  # Enter the desired instance type
+      KeyName: !Ref KeyName
+      NetworkInterfaces:
+        - PrivateIpAddress: 10.3.0.10  # Enter the desired private IP address
+          SubnetId: !Ref ManagementSubnet
+          DeviceIndex: 0
+          GroupSet:
+            - !Ref ManagementEC2SecurityGroup
+      Tags:
+        - Key: Name
+          Value: mgmt-svr
+
+###resources for vm-series deployment
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      Tags:
+        - Key: Application
+          Value: !Ref AWS::StackId
+        - Key: Network
+          Value: VPC
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - "VPC"
+
+  IGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+    Tags:
+        - Key: Application
+          Value: !Ref AWS::StackId
+        - Key: Network
+          Value: VPCIGW
+        - Key: Name
+          Value: !Join
+            - "-"
+            - - !Ref AWS::StackName
+              - "IGW"
+
+  GatewayToInternet:
+  Type: AWS::EC2::VPCGatewayAttachment
+  Properties:
+    VpcId: !Ref VPC
+    InternetGatewayId: !Ref IGW
+  DependsOn:
+    - IGW
+
+Outputs:
+  AppbEC2InstancePublicIP:
+    Value: !GetAtt AppbEC2Instance.PublicIp
+    Description: Public IP address of AppbEC2Instance
+
+ 
