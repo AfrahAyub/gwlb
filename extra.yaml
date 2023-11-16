@@ -23,8 +23,6 @@ Parameters:
   PanoramaInstanceType:
     Type : 'AWS::SSM::Parameter::Value<AWS::EC2::Instance::Id>'
     Default: "m5.2xlarge"
-  SshKeyName:
-    Type: String
 
 ###defining parameters for vm-series and deploying vm-series
   # Management Network CIDR
@@ -367,15 +365,6 @@ Resources:
       Tags:
         - Key: Name
           Value: ManagementSubnet
-
-
-  SecVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.2.0.0/16
-      Tags:
-        - Key: Name
-          Value: sec-vpc
 ### gateway loadbalancer
   GWLBTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
@@ -424,20 +413,20 @@ Resources:
       GatewayLoadBalancerArns:
         - !Ref GWLB
 
-  GWLBEndpoint:
-    Type: 'AWS::EC2::VPCEndpoint'
-    Properties:
-      VpcId: !Ref SecVpc
-      ServiceName: !GetAtt GWLBEndpointService.ServiceName
-      SubnetIds: !Split [',', !Ref SecGwlbeSubnet]
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: !GetAtt GWLBEndpointService.ServiceName
-            Action: 'ec2:DescribeSecurityGroups'
-            Resource: '*'
+#  GWLBEndpoint:
+#    Type: 'AWS::EC2::VPCEndpoint'
+#    Properties:
+#      VpcId: !Ref SecVpc
+#      ServiceName: !GetAtt GWLBEndpointService.ServiceName
+#      SubnetIds: !Split [',', !Ref SecGwlbeSubnet]
+#      PolicyDocument:
+#       Version: '2012-10-17'
+#        Statement:
+#          - Effect: Allow
+#            Principal:
+#              Service: !GetAtt GWLBEndpointService.ServiceName
+#            Action: 'ec2:DescribeSecurityGroups'
+#            Resource: '*'
 
 ### panorama
 
@@ -453,7 +442,6 @@ Resources:
     Properties:
       ImageId: !Ref PanoramaAmi
       InstanceType: !Ref PanoramaInstanceType
-      KeyName: !Ref SshKeyName
       NetworkInterfaces: 
         - NetworkInterfaceId: !Ref PrivateNetworkInterface
           DeviceIndex: 0
@@ -804,6 +792,14 @@ Resources:
         - !Ref AttTgwSubnet
 
 ### VPC Resources for Security VPC
+
+  SecVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.3.0.0/16
+      Tags:
+        - Key: Name
+          Value: sec-vpc
 
   SecGwlbeSubnet:
     Type: AWS::EC2::Subnet
