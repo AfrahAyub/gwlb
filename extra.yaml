@@ -367,6 +367,15 @@ Resources:
       Tags:
         - Key: Name
           Value: ManagementSubnet
+
+
+  SecVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.2.0.0/16
+      Tags:
+        - Key: Name
+          Value: sec-vpc
 ### gateway loadbalancer
   GWLBTargetGroup:
     Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
@@ -795,14 +804,6 @@ Resources:
         - !Ref AttTgwSubnet
 
 ### VPC Resources for Security VPC
-
-  SecVPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.2.0.0/16
-      Tags:
-        - Key: Name
-          Value: sec-vpc
 
   SecGwlbeSubnet:
     Type: AWS::EC2::Subnet
