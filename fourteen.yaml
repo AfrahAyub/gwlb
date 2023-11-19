@@ -426,13 +426,14 @@ Resources:
       ServiceName: !GetAtt GWLBEndpointService.ServiceName
       SubnetIds: !Split [',', !Ref SecGwlbeSubnet]
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: 2012-10-17
         Statement:
           - Effect: Allow
-            Principal:
-              Service: !GetAtt GWLBEndpointService.ServiceName
-            Action: 'ec2:DescribeSecurityGroups'
-            Resource: '*'
+            Principal: '*'
+            Action:
+              - 's3:GetObject'
+            Resource:
+              - 'arn:aws:s3:::mybucket/*'
 
   SecVPC:
     Type: AWS::EC2::VPC
