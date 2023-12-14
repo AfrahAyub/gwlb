@@ -17,12 +17,14 @@ To deploy in normal AWS account:
 
 1. Prep S3 bucket
 
-Jam will use bucket names `aws-jam-challenge-resources`
+Jam will use bucket names `aws-jam-challenge-resources-us-east-1`
 
-To deploy in a separate account, prepare a bucket with same format but apply a unique prefix to the bucket. For example, we used `panw-aws-jam-challenge-resources`
+To deploy in a separate account, prepare a bucket with same format but apply a unique prefix to the bucket. For example, we used `panw-aws-jam-challenge-resources-us-east-1`
+
 
 2. Upload assets to S3
 
+Create a folder in the bucket named `panw-vmseries-gwlb/` In that folder, upload the following assets:
 
 - The nested templates (combined, security, vmseries)
 - authcodes
@@ -35,6 +37,13 @@ The JAM platform doesn't have support for folders in the S3 bucket, so we will d
 
 Use aws-jam-panw-gwlb-cfn-root.yaml to create the stack. There is only one parameter that will need to be modified, which is the name of the bucket. Modify the bucket to include the prefix used in your account
 
+### [cloudngfw-gwlb-2023](https://github.com/seanyoungberg/panw-vmseries-aws-jam/tree/main/cloudngfw-gwlb-2023)
+
+Collecting of assets for attempts to migrate Jam to use Cloud NGFW instead of VM-Series. Could not move forward with this due to complications of orchestrating the Cloud NGFW Tenants.
+
+### [vmseries-single-2022](https://github.com/seanyoungberg/panw-vmseries-aws-jam/tree/main/vmseries-single-2022)
+
+Archive of the assets used for the Re:Invent Jam in 2022. Authored by Matt Harms. Uses single VPC architecture for VM-Series
 
 
 
