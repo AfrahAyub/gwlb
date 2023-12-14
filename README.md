@@ -126,6 +126,10 @@ You started the journey by conducting a comprehensive audit of the existing AWS 
 
 
 
+
+
+
+
 ## TASK2
 
 ## Background
@@ -176,6 +180,12 @@ Time to find out how BrewGuardians Webstore became the weak link in our brew cha
 - Palo Alto Networks NGFW VM-Series
 - Amazon EC2
 - AWS Transit Gateway (TGW route tables) <br />
+
+
+
+
+
+
 
 
 ## TASK3
